@@ -9,6 +9,8 @@
 import UIKit
 import MapKit
 import CoreLocation
+import Alamofire
+import AlamofireImage
 
 class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIGestureRecognizerDelegate {
 
@@ -28,6 +30,9 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
     var flowLayout = UICollectionViewFlowLayout()
     var collectionView: UICollectionView?
     
+    var imageUrlArray = [String]()
+    var imageArray = [UIImage]()
+    
     override func viewDidLoad(){
         super.viewDidLoad()
         mapView.delegate = self
@@ -42,7 +47,7 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
         collectionView?.register( PhotoCell.self, forCellWithReuseIdentifier: "photoCell")
         collectionView?.delegate = self
         collectionView?.dataSource = self
-        collectionView?.backgroundColor = #colorLiteral(red: 0.9686274529, green: 0.78039217, blue: 0.3450980484, alpha: 1)
+        collectionView?.backgroundColor = #colorLiteral(red: 1, green: 1, blue: 1, alpha: 1)
         
         pullUpView.addSubview(collectionView!)
     }
@@ -70,6 +75,7 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
     
     @objc func animateViewDown()
     {
+        closeAllSessions()
         pullUpViewHeightConstraint.constant = 0
         UIView.animate(withDuration: 0.3) {
             self.view.layoutIfNeeded()
@@ -80,6 +86,12 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
         removePin()
         removeSpinner()
         removeProgressLabel()
+        closeAllSessions()
+        
+        imageUrlArray = []
+        imageArray = []
+        
+        collectionView?.reloadData()
         
         animateViewUp()
         swipe()
@@ -93,7 +105,17 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
         let coordinateRegion = MKCoordinateRegionMakeWithDistance(touchCoordinate, regionRadius * 2.0, regionRadius * 2.0)
         mapView.setRegion(coordinateRegion, animated: true)
         
-        //print(flickrUrl(forApiKey: apiKey, withAnnotation: annotation, andNumberOfPhotos: 40))
+        retrieveUrls(forAnnotation: annotation) { (finished) in
+            if finished{
+                self.retrieveImages(handler: { (finished) in
+                    if finished{
+                        self.removeSpinner()
+                        self.removeProgressLabel()
+                        self.collectionView?.reloadData()
+                    }
+                })
+            }
+        }
     }
     
     func removePin(){
@@ -119,9 +141,9 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
     
     func addProgressLabel(){
         progressLbl = UILabel()
-        progressLbl?.frame = CGRect(x: screenSize.width / 2 - 120, y: 155, width: 240, height: 40)
+        progressLbl?.frame = CGRect(x: screenSize.width / 2 - 150, y: 155, width: 300, height: 40)
         progressLbl?.font = UIFont(name: "Avenir Next", size: 18)
-        progressLbl?.text = "0/20 IMAGES LOADED"
+        progressLbl?.text = "DOWNLOADING IMAGES"
         progressLbl?.textColor = #colorLiteral(red: 0.2549019754, green: 0.2745098174, blue: 0.3019607961, alpha: 1)
         progressLbl?.textAlignment = .center
         collectionView?.addSubview(progressLbl!)
@@ -173,6 +195,42 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
         let coordinateRegion = MKCoordinateRegionMakeWithDistance(coordinate, regionRadius * 2.0, regionRadius * 2.0)
         mapView.setRegion(coordinateRegion, animated: true)
     }
+    
+    func retrieveUrls(forAnnotation annotation: DropabblePin, handler: @escaping (_ status: Bool)-> () ){
+        Alamofire.request(flickrUrl(forApiKey: apiKey, withAnnotation: annotation, andNumberOfPhotos: 40)).responseJSON { (response) in
+            if response.result.error == nil{
+                guard let json = response.result.value as? Dictionary<String, AnyObject> else { return }
+                let photosDict = json["photos"] as! Dictionary<String, AnyObject>
+                let photosDictArray = photosDict["photo"] as! [Dictionary<String, AnyObject>]
+                for photo in photosDictArray{
+                    let postUrl = "https://farm\(photo["farm"]!).staticflickr.com/\(photo["server"]!)/\(photo["id"]!)_\(photo["secret"]!)_h_d.jpg"
+                    self.imageUrlArray.append(postUrl)
+                }
+                handler(true)
+            }
+        }
+    }
+    
+    func retrieveImages(handler: @escaping (_ status: Bool)-> ()) {
+        for url in imageUrlArray{
+            Alamofire.request(url).responseImage(completionHandler: { (response) in
+                guard let image = response.result.value else { return }
+                self.imageArray.append(image)
+                self.progressLbl?.text = "\(self.imageArray.count)/\(self.imageUrlArray.count) IMAGES DOWNLOADED"
+                
+                if self.imageArray.count == self.imageUrlArray.count{
+                    handler(true)
+                }
+            })
+        }
+    }
+    
+    func closeAllSessions(){
+        Alamofire.SessionManager.default.session.getTasksWithCompletionHandler { (sessionDataTask, uploadData, downloadData) in
+            sessionDataTask.forEach({ $0.cancel() })
+            downloadData.forEach({ $0.cancel() })
+        }
+    }
 }
 
 extension MapVC: UICollectionViewDelegate, UICollectionViewDataSource {
@@ -181,12 +239,15 @@ extension MapVC: UICollectionViewDelegate, UICollectionViewDataSource {
     }
     
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return 4
+        return imageArray.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "photoCell", for: indexPath) as? PhotoCell
-        return cell!
+        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "photoCell", for: indexPath) as? PhotoCell else { return UICollectionViewCell() }
+        let imageFromIndex = imageArray[indexPath.row]
+        let imageView = UIImageView(image: imageFromIndex)
+        cell.addSubview(imageView)
+        return cell
     }
 }
 

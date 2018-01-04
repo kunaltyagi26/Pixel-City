@@ -49,6 +49,8 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
         collectionView?.dataSource = self
         collectionView?.backgroundColor = #colorLiteral(red: 1, green: 1, blue: 1, alpha: 1)
         
+        registerForPreviewing(with: self, sourceView: collectionView!)
+        
         pullUpView.addSubview(collectionView!)
     }
     
@@ -203,7 +205,7 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
                 let photosDict = json["photos"] as! Dictionary<String, AnyObject>
                 let photosDictArray = photosDict["photo"] as! [Dictionary<String, AnyObject>]
                 for photo in photosDictArray{
-                    let postUrl = "https://farm\(photo["farm"]!).staticflickr.com/\(photo["server"]!)/\(photo["id"]!)_\(photo["secret"]!)_h_d.jpg"
+                    let postUrl = "https://farm\(photo["farm"]!).staticflickr.com/\(photo["server"]!)/\(photo["id"]!)_\(photo["secret"]!)_m_d.jpg"
                     self.imageUrlArray.append(postUrl)
                 }
                 handler(true)
@@ -249,5 +251,28 @@ extension MapVC: UICollectionViewDelegate, UICollectionViewDataSource {
         cell.addSubview(imageView)
         return cell
     }
+    
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        guard let popVC = storyboard?.instantiateViewController(withIdentifier: "PopVC") as? PopVC else { return }
+        popVC.initData(forImage: imageArray[indexPath.row])
+        present(popVC, animated: true, completion: nil)
+    }
+}
+
+extension MapVC: UIViewControllerPreviewingDelegate{
+    func previewingContext(_ previewingContext: UIViewControllerPreviewing, viewControllerForLocation location: CGPoint) -> UIViewController? {
+        guard let indexPath = collectionView?.indexPathForItem(at: location), let cell = collectionView?.cellForItem(at: indexPath) else { return nil }
+        guard let popVC = storyboard?.instantiateViewController(withIdentifier: "PopVC") as? PopVC else { return nil }
+        popVC.initData(forImage: imageArray[indexPath.row])
+        let viewRect = collectionView!.convert(cell.frame, to: view.superview!)
+        previewingContext.sourceRect = viewRect
+        return popVC
+    }
+    
+    func previewingContext(_ previewingContext: UIViewControllerPreviewing, commit viewControllerToCommit: UIViewController) {
+        show(viewControllerToCommit, sender: self)
+    }
+    
+    
 }
 

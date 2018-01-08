@@ -33,6 +33,9 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
     var imageUrlArray = [String]()
     var imageArray = [UIImage]()
     
+    var idArray: [String] = []
+    var secretArray: [String] = []
+    
     override func viewDidLoad(){
         super.viewDidLoad()
         mapView.delegate = self
@@ -130,7 +133,7 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
         spinner = UIActivityIndicatorView()
         spinner?.center = CGPoint(x: screenSize.width / 2 - (spinner?.frame.width)! / 2, y: 130)
         spinner?.activityIndicatorViewStyle = .whiteLarge
-        spinner?.color = #colorLiteral(red: 0.2549019754, green: 0.2745098174, blue: 0.3019607961, alpha: 1)
+        spinner?.color = #colorLiteral(red: 0, green: 0, blue: 0, alpha: 1)
         spinner?.startAnimating()
         collectionView?.addSubview(spinner!)
     }
@@ -176,7 +179,7 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
     func locationManager(_ manager: CLLocationManager,
                          didUpdateLocations locations: [CLLocation]){
         let latestLocation: CLLocation = locations[locations.count - 1]
-        print("Latest location ", latestLocation)
+        //print("Latest location ", latestLocation)
         
         if startLocation == nil {
             startLocation = latestLocation
@@ -207,6 +210,15 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
                 for photo in photosDictArray{
                     let postUrl = "https://farm\(photo["farm"]!).staticflickr.com/\(photo["server"]!)/\(photo["id"]!)_\(photo["secret"]!)_m_d.jpg"
                     self.imageUrlArray.append(postUrl)
+                    self.idArray.append(photo["id"] as! String)
+                    self.secretArray.append(photo["secret"] as! String)
+                    print(postUrl)
+                    /*print(postUrl)
+                    print(self.imageUrlArray.index(of: postUrl)!)
+                    print(photo["id"]!)
+                    print(self.idArray.index(of: photo["id"] as! String)!)
+                    print(photo["secret"]!)
+                    print(self.secretArray.index(of: photo["secret"] as! String)!)*/
                 }
                 handler(true)
             }
@@ -253,9 +265,29 @@ extension MapVC: UICollectionViewDelegate, UICollectionViewDataSource {
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        removeSpinner()
+        spinner?.color = #colorLiteral(red: 0.9999960065, green: 1, blue: 1, alpha: 1)
+        addSpinner()
         guard let popVC = storyboard?.instantiateViewController(withIdentifier: "PopVC") as? PopVC else { return }
         popVC.initData(forImage: imageArray[indexPath.row])
-        present(popVC, animated: true, completion: nil)
+        popVC.getDetails(photoId: idArray[indexPath.row], secret: secretArray[indexPath.row]) { (success) in
+            if success{
+                popVC.retrievePictureDetails(handler: { (finished) in
+                    if finished{
+                        popVC.getFavourites(handler: { (finished) in
+                            if finished{
+                                self.removeSpinner()
+                                self.present(popVC, animated: true, completion: nil)
+                            }
+                        })
+                    }
+                })
+            }
+        }
+        //print(indexPath.row)
+        //print(imageArray[indexPath.row])
+        //print(idArray[indexPath.row])
+        //print(secretArray[indexPath.row])
     }
 }
 
@@ -266,6 +298,9 @@ extension MapVC: UIViewControllerPreviewingDelegate{
         popVC.initData(forImage: imageArray[indexPath.row])
         let viewRect = collectionView!.convert(cell.frame, to: view.superview!)
         previewingContext.sourceRect = viewRect
+        //popVC.dismissLbl.isHidden = true
+        //popVC.postedByLbl.isHidden = true
+        //popVC.takenOnLbl.isHidden = true
         return popVC
     }
     

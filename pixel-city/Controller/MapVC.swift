@@ -35,6 +35,8 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
     
     var idArray: [String] = []
     var secretArray: [String] = []
+  
+  var dicArray: [(image: String, id: String, secret: String)] = []
     
     override func viewDidLoad(){
         super.viewDidLoad()
@@ -212,6 +214,8 @@ class MapVC: UIViewController, MKMapViewDelegate, CLLocationManagerDelegate, UIG
                     self.imageUrlArray.append(postUrl)
                     self.idArray.append(photo["id"] as! String)
                     self.secretArray.append(photo["secret"] as! String)
+                    self.dicArray.append((image: postUrl, id: photo["id"] as! String, secret: photo["secret"] as! String))
+                    print(self.dicArray)
                     print(postUrl)
                     /*print(postUrl)
                     print(self.imageUrlArray.index(of: postUrl)!)
